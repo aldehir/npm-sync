@@ -1,0 +1,5 @@
+node_modules/
+
+# TypeScript output
+dist/
+tsconfig.tsbuildinfo
