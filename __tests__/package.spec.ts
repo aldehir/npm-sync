@@ -11,11 +11,11 @@ test("parse package string", () => {
 
   spec = parsePackageString('@types/node')
   expect(spec.name).toEqual('@types/node')
-  expect(spec).not.toHaveProperty('version')
+  expect(spec.version).toEqual('latest')
 
   spec = parsePackageString('axios')
   expect(spec.name).toEqual('axios')
-  expect(spec).not.toHaveProperty('version')
+  expect(spec.version).toEqual('latest')
 
   spec = parsePackageString('malformed@')
   expect(spec.name).toEqual('malformed')

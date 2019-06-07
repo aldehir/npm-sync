@@ -1,6 +1,6 @@
 export interface PackageSpec {
   name: string
-  version?: string
+  version: string
 }
 
 export function parsePackageString (pkg: string): PackageSpec {
@@ -13,6 +13,6 @@ export function parsePackageString (pkg: string): PackageSpec {
     }
   }
 
-  return { name: pkg }
+  return { name: pkg, version: "latest" }
 }
 
