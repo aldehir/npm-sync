@@ -1,6 +1,6 @@
 import * as yargs from 'yargs'
 import * as semver from 'semver'
-import axios from 'axios'
+import axios, { AxiosResponse } from 'axios'
 
 
 import { PackageSpec, parsePackageString } from './package'
@@ -33,6 +33,43 @@ export class DownloadManager {
   }
 }
 
+export interface Package {
+  _id: string
+
+  name: string
+  dist: PackageDistribution
+
+  dependencies?: PackageDependencies
+  devDependencies?: PackageDependencies
+
+  [property: string]: any
+}
+
+export interface PackageDistribution {
+  tarball: string
+  shasum: string
+
+  [property: string]: string
+}
+
+export interface PackageDependencies {
+  [name: string]: string
+}
+
+
+function buildPackage(info: any) {
+  if (info._id && info.name && info.dist) {
+    let dist = info.dist
+
+    if (dist.tarball && dist.shasum) {
+      return (info as Package)
+    }
+  }
+
+  throw new Error('Package does not have all necessary properties')
+}
+
+
 export class PackageResolver {
   registry: string
 
@@ -44,23 +81,26 @@ export class PackageResolver {
     let spec = parsePackageString(pkg)
 
     return axios.get(`${this.registry}/${spec.name}`)
-      .then((response) => {
-        let versions = response.data.versions
-        let tags = response.data['dist-tags']
+      .then((response) => this.handleResponse(spec, response))
+      .then(buildPackage)
+  }
 
-        if (tags[spec.version]) {
-          let version = tags[spec.version]
-          return versions[version]
-        }
+  private handleResponse(spec: PackageSpec, response: AxiosResponse): Package {
+    let versions = response.data.versions
+    let tags = response.data['dist-tags']
 
-        let best = semver.maxSatisfying(Object.keys(versions), spec.version)
+    if (tags[spec.version]) {
+      let version = tags[spec.version]
+      return versions[version]
+    }
 
-        if (!best) {
-          throw new Error('Could not determine best version')
-        }
+    let best = semver.maxSatisfying(Object.keys(versions), spec.version)
 
-        return versions[best]
-      })
+    if (!best) {
+      throw new Error('Could not determine best version')
+    }
+
+    return versions[best]
   }
 
 }
