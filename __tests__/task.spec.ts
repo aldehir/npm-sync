@@ -34,3 +34,40 @@ test("test concurrency", (done) => {
       done()
     })
 })
+
+test("test concurrency 2", (done) => {
+  let spawn = 10
+  let concurrency = 4
+  let runningTasks = 0
+  let tasksExecuted = 0
+
+  let queue = new TaskQueue({ concurrency })
+
+  for(let i = 0; i < spawn; i++) {
+    let pendingTask = queue.add()
+
+    pendingTask.then((task) => {
+      runningTasks++
+
+      // Once we reach # of max concurrent tasks, expect to be running that many
+      if (i == concurrency - 1) {
+        expect(runningTasks).toEqual(concurrency)
+      }
+
+      // Make sure we never exceed concurrency
+      expect(runningTasks).toBeLessThanOrEqual(concurrency)
+
+      // Delay completion of task
+      process.nextTick(() => {
+        task.done()
+
+        runningTasks--
+        tasksExecuted++
+
+        if (tasksExecuted == spawn) {
+          done()
+        }
+      })
+    })
+  }
+})
