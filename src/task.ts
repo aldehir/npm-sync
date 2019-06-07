@@ -10,13 +10,23 @@ export class Task {
   id: number
 
   promise: Promise<Task>
-  resolve!: () => void
-  reject!: (reason?: any) => void
+
+  private resolve!: TaskResolve
+  private reject!: TaskReject
 
   constructor(queue: TaskQueue, id: number) {
     this.queue = queue
     this.id = id
     this.promise = this.createPromise()
+  }
+
+  execute() {
+    this.resolve(this)
+  }
+
+  cancel(reason?: any) {
+    this.done()
+    this.reject(reason)
   }
 
   done() {
@@ -25,11 +35,8 @@ export class Task {
 
   private createPromise() {
     return new Promise((resolve: TaskResolve, reject: TaskReject) => {
-      this.resolve = () => resolve(this)
-      this.reject = (reason?: any) => {
-        this.done()
-        reject(reason)
-      }
+      this.resolve = resolve
+      this.reject = reject
     })
   }
 }
@@ -62,9 +69,9 @@ export class TaskQueue {
   runPending() {
     while (this.pendingTasks.length > 0 && this.activeTasks.size < this.concurrency) {
       let next = this.pendingTasks.pop()
-      if (next && next.resolve) {
+      if (next) {
         this.activeTasks.add(next)
-        next.resolve()
+        next.execute()
       }
     }
   }
