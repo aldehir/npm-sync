@@ -54,7 +54,7 @@ export function buildPackage (info: any) {
   throw new Error('Package does not have all necessary properties')
 }
 
-export class PackageResolver {
+export default class PackageResolver {
   registry: string
 
   constructor (registry: string) {

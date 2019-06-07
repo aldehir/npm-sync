@@ -2,7 +2,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import axios from 'axios'
 
-import { PackageSpec, parsePackageString, PackageResolver } from '../src/package'
+import PackageResolver, { PackageSpec, parsePackageString } from '../src/package'
 
 jest.mock('axios')
 
