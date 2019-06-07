@@ -1,4 +1,7 @@
 import * as yargs from 'yargs'
+import * as semver from 'semver'
+import axios from 'axios'
+
 
 import { PackageSpec, parsePackageString } from './package'
 import { Task, TaskQueue } from './task'
@@ -28,6 +31,38 @@ export class DownloadManager {
   download (pkg: string): Promise<string> {
     return Promise.resolve('')
   }
+}
+
+export class PackageResolver {
+  registry: string
+
+  constructor (registry: string) {
+    this.registry = registry
+  }
+
+  resolve (pkg: string) {
+    let spec = parsePackageString(pkg)
+
+    return axios.get(`${this.registry}/${spec.name}`)
+      .then((response) => {
+        let versions = response.data.versions
+        let tags = response.data['dist-tags']
+
+        if (tags[spec.version]) {
+          let version = tags[spec.version]
+          return versions[version]
+        }
+
+        let best = semver.maxSatisfying(Object.keys(versions), spec.version)
+
+        if (!best) {
+          throw new Error('Could not determine best version')
+        }
+
+        return versions[best]
+      })
+  }
+
 }
 
 export let DownloadCommand = {
