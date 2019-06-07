@@ -1,3 +1,6 @@
+type TaskResolve = (task?: Task) => void
+type TaskReject = (reason?: any) => void
+
 export interface TaskQueueOptions {
   concurrency?: number
 }
@@ -6,17 +9,28 @@ export class Task {
   queue: TaskQueue
   id: number
 
-  promise?: Promise<Task>
-  resolve?: () => void
-  reject?: () => void
+  promise: Promise<Task>
+  resolve!: () => void
+  reject!: (reason?: any) => void
 
   constructor(queue: TaskQueue, id: number) {
     this.queue = queue
     this.id = id
+    this.promise = this.createPromise()
   }
 
   done() {
     this.queue.markCompleted(this)
+  }
+
+  private createPromise() {
+    return new Promise((resolve: TaskResolve, reject: TaskReject) => {
+      this.resolve = () => resolve(this)
+      this.reject = (reason?: any) => {
+        this.done()
+        reject(reason)
+      }
+    })
   }
 }
 
@@ -35,19 +49,8 @@ export class TaskQueue {
 
   add(): Promise<Task> {
     let task = new Task(this, ++this.nextId)
-    task.promise = new Promise(
-      (resolve: (_?: Task) => void, reject: (_?: any) => void) => {
-        task.resolve = () => resolve(task)
-        task.reject = (reason?: any) => {
-          task.done()
-          reject(reason)
-        }
-      }
-     )
-
     this.pendingTasks.push(task)
     this.runPending()
-
     return task.promise
   }
 
