@@ -42,7 +42,7 @@ export function parsePackageString (pkg: string): PackageSpec {
   return { name: pkg, version: "latest" }
 }
 
-export function buildPackage(info: any) {
+export function buildPackage (info: any) {
   if (info._id && info.name && info.dist) {
     let dist = info.dist
 
@@ -69,7 +69,7 @@ export class PackageResolver {
       .then(buildPackage)
   }
 
-  private handleResponse(spec: PackageSpec, response: AxiosResponse): Package {
+  private handleResponse (spec: PackageSpec, response: AxiosResponse): Package {
     let versions = response.data.versions
     let tags = response.data['dist-tags']
 
