@@ -3,7 +3,7 @@ export interface PackageSpec {
   version?: string
 }
 
-export function parsePackageString(pkg: string): PackageSpec {
+export function parsePackageString (pkg: string): PackageSpec {
   let delimiterPosition = pkg.lastIndexOf('@')
 
   if (delimiterPosition > 0 && delimiterPosition < pkg.length) {

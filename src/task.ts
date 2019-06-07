@@ -14,26 +14,26 @@ export class Task {
   private resolve!: TaskResolve
   private reject!: TaskReject
 
-  constructor(queue: TaskQueue, id: number) {
+  constructor (queue: TaskQueue, id: number) {
     this.queue = queue
     this.id = id
     this.promise = this.createPromise()
   }
 
-  execute() {
+  execute () {
     this.resolve(this)
   }
 
-  cancel(reason?: any) {
+  cancel (reason?: any) {
     this.done()
     this.reject(reason)
   }
 
-  done() {
+  done () {
     this.queue.markCompleted(this)
   }
 
-  private createPromise() {
+  private createPromise () {
     return new Promise((resolve: TaskResolve, reject: TaskReject) => {
       this.resolve = resolve
       this.reject = reject
@@ -48,25 +48,25 @@ export class TaskQueue {
   pendingTasks: Task[] = []
   activeTasks: Set<Task> = new Set()
 
-  constructor(opts: TaskQueueOptions) {
+  constructor (opts: TaskQueueOptions) {
     if (opts.concurrency) {
       this.concurrency = opts.concurrency
     }
   }
 
-  add(): Promise<Task> {
+  add (): Promise<Task> {
     let task = new Task(this, ++this.nextId)
     this.pendingTasks.push(task)
     this.runPending()
     return task.promise
   }
 
-  markCompleted(task: Task) {
+  markCompleted (task: Task) {
     this.activeTasks.delete(task)
     this.runPending()
   }
 
-  runPending() {
+  runPending () {
     while (this.pendingTasks.length > 0 && this.activeTasks.size < this.concurrency) {
       let next = this.pendingTasks.pop()
       if (next) {

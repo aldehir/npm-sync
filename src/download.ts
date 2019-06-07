@@ -1,5 +1,6 @@
 import * as yargs from 'yargs'
 
+import { PackageSpec, parsePackageString } from './package'
 import { Task, TaskQueue } from './task'
 
 export interface DownloadManagerOptions {
@@ -11,12 +12,12 @@ export class DownloadManager {
   queue: TaskQueue
   cache: Set<string>
 
-  constructor(opts: DownloadManagerOptions) {
+  constructor (opts: DownloadManagerOptions) {
     this.queue = new TaskQueue({ concurrency: opts.concurrency })
     this.cache = new Set()
   }
 
-  queueDownload(pkg: string) {
+  queueDownload (pkg: string) {
     this.queue.add().then((task: Task) => {
       return this.download(pkg).then(() => task.done())
     })
@@ -24,7 +25,7 @@ export class DownloadManager {
     console.log(`Queued download for ${pkg}`)
   }
 
-  download(pkg: string): Promise<string> {
+  download (pkg: string): Promise<string> {
     return Promise.resolve('')
   }
 }
