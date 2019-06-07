@@ -1,11 +1,11 @@
-import { Ticket, TaskQueue } from '../src/ticket'
+import { Task, TaskQueue } from '../src/task'
 
 test("test single task in queue", (done) => {
   let queue = new TaskQueue({ concurrency: 8 })
 
   queue.add()
-    .then((ticket: Ticket) => {
-      ticket.done()
+    .then((task: Task) => {
+      task.done()
       done()
     })
 })
@@ -15,22 +15,22 @@ test("test concurrency", (done) => {
   let completed = 0
 
   queue.add()
-    .then((ticket: Ticket) => {
+    .then((task: Task) => {
       expect(queue.activeTasks.size).toBeLessThanOrEqual(2)
-      ticket.done()
+      task.done()
     })
 
   queue.add()
-    .then((ticket: Ticket) => {
+    .then((task: Task) => {
       expect(queue.activeTasks.size).toBeLessThanOrEqual(2)
-      ticket.done()
+      task.done()
     })
 
   queue.add()
-    .then((ticket: Ticket) => {
+    .then((task: Task) => {
       expect(queue.activeTasks.size).toEqual(1)
       expect(queue.pendingTasks.length).toEqual(0)
-      ticket.done()
+      task.done()
       done()
     })
 })

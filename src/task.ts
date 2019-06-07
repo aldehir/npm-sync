@@ -2,11 +2,11 @@ export interface TaskQueueOptions {
   concurrency?: number
 }
 
-export class Ticket {
+export class Task {
   queue: TaskQueue
   id: number
 
-  promise?: Promise<Ticket>
+  promise?: Promise<Task>
   resolve?: () => void
   reject?: () => void
 
@@ -24,8 +24,8 @@ export class TaskQueue {
   readonly concurrency: number = 8
 
   nextId: number = 0
-  pendingTasks: Ticket[] = []
-  activeTasks: Set<Ticket> = new Set()
+  pendingTasks: Task[] = []
+  activeTasks: Set<Task> = new Set()
 
   constructor(opts: TaskQueueOptions) {
     if (opts.concurrency) {
@@ -33,24 +33,26 @@ export class TaskQueue {
     }
   }
 
-  add(): Promise<Ticket> {
-    let ticket = new Ticket(this, ++this.nextId)
-    ticket.promise = new Promise((resolve: (_?: Ticket) => void, reject) => {
-      ticket.resolve = () => resolve(ticket)
-      ticket.reject = (reason?: any) => {
-        ticket.done()
-        reject(reason)
+  add(): Promise<Task> {
+    let task = new Task(this, ++this.nextId)
+    task.promise = new Promise(
+      (resolve: (_?: Task) => void, reject: (_?: any) => void) => {
+        task.resolve = () => resolve(task)
+        task.reject = (reason?: any) => {
+          task.done()
+          reject(reason)
+        }
       }
-    })
+     )
 
-    this.pendingTasks.push(ticket)
+    this.pendingTasks.push(task)
     this.runPending()
 
-    return ticket.promise
+    return task.promise
   }
 
-  markCompleted(ticket: Ticket) {
-    this.activeTasks.delete(ticket)
+  markCompleted(task: Task) {
+    this.activeTasks.delete(task)
     this.runPending()
   }
 
