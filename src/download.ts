@@ -85,7 +85,11 @@ export class DownloadManager {
     return status
   }
 
-  handleResponse(status: DownloadStatus, writeTo: Writable, response: AxiosResponse) {
+  handleResponse (
+    status: DownloadStatus,
+    writeTo: Writable,
+    response: AxiosResponse
+  ) {
     let stream = response.data
     let contentLength = response.headers['content-length'] || 0
 
@@ -151,7 +155,7 @@ export class DownloadStatus extends EventEmitter {
   get bytesCompleted () { return this._bytesCompleted }
   get error (): Error | undefined { return this._error }
 
-  setContentLength(bytes: number) {
+  setContentLength (bytes: number) {
     this._bytesTotal = bytes
     this.emitProgress()
   }
