@@ -78,6 +78,9 @@ describe('DownloadManager', () =>  {
     let destinationStream = new MemoryStream(null, { readable: false })
 
     ;(axios.get as jest.Mock).mockResolvedValue({
+      headers: {
+        'content-length': 18
+      },
       data: new MemoryStream('dummy package data', { writable: false })
     })
 

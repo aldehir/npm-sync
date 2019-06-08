@@ -1,11 +1,14 @@
 import fs from 'fs'
 import path from 'path'
 import yargs from 'yargs'
+import { Writable } from 'stream'
+import { EventEmitter } from 'events';
 import axios, { AxiosResponse } from 'axios'
 
 import PackageResolver, { Package } from './package'
 import { Task, TaskQueue } from './task'
 import { mkdirRecursively } from './mkdir'
+import { thisExpression, tsImportEqualsDeclaration } from '@babel/types';
 
 export interface DownloadManagerOptions {
   registry: string
@@ -71,23 +74,35 @@ export class DownloadManager {
     throw new Error(`Failed to download ${pkg.dist.tarball}`)
   }
 
-  tryDownload (url: string, destination: string): Promise<any> {
-    return axios.get(url, { responseType: 'stream' })
-      .then((response: AxiosResponse) => {
-        return new Promise((resolve, reject) => {
-          let stream = response.data
+  tryDownload (url: string, destination: string): DownloadStatus {
+    let status = new DownloadStatus(url, destination)
+    let writeStream = fs.createWriteStream(destination)
 
-          stream.pipe(fs.createWriteStream(destination))
+    axios.get(url, { responseType: 'stream' })
+      .then((resp) => this.handleResponse(status, writeStream, resp))
 
-          stream.on('end', () => {
-            resolve()
-          })
+    return status
+  }
 
-          stream.on('error', (err: Error) => {
-            reject(err)
-          })
-        })
-      })
+  handleResponse(status: DownloadStatus, writeTo: Writable, response: AxiosResponse) {
+    let stream = response.data
+    let contentLength = response.headers['content-length'] || 0
+
+    status.setContentLength(contentLength)
+
+    stream.pipe(writeTo)
+
+    stream.on('data', (chunk: Buffer) => {
+      status.updateProgress(chunk.length)
+    })
+
+    stream.on('end', () => {
+      status.setCompleted()
+    })
+
+    stream.on('error', (err: Error) => {
+      status.setFailed(err)
+    })
   }
 
   shouldDownload (pkg: Package): boolean {
@@ -105,6 +120,98 @@ export class DownloadManager {
       path.basename(pkg.dist.tarball)
     )
   }
+}
+
+export enum DownloadState {
+  Queued,
+  InProgress,
+  Completed,
+  Failed
+}
+
+export class DownloadStatus extends EventEmitter implements Promise<void> {
+  readonly url: string
+  readonly destination: string
+
+  private _state: DownloadState = DownloadState.Queued
+  private _bytesTotal: number = 0
+  private _bytesCompleted: number = 0
+  private _error?: Error
+
+  private _promise: Promise<void>
+
+  constructor (url: string, destination: string) {
+    super()
+
+    this.url = url
+    this.destination = destination
+
+    this._promise = new Promise((resolve, reject) => {
+      this.on('finish', resolve)
+      this.on('error', reject)
+    })
+  }
+
+  get state () { return this._state }
+  get bytesTotal () { return this._bytesTotal }
+  get bytesCompleted () { return this._bytesCompleted }
+  get error (): Error | undefined { return this._error }
+
+  get promise () : Promise<void> { return this._promise }
+
+  setContentLength(bytes: number) {
+    this._bytesTotal = bytes
+    this.emitProgress()
+  }
+
+  setStarted () {
+    this.setState(DownloadState.InProgress)
+    this.emit('start')
+  }
+
+  setCompleted () {
+    this.setState(DownloadState.Completed)
+    this.emit('finish')
+  }
+
+  setFailed (error?: Error) {
+    this._error = error
+    this.setState(DownloadState.Failed)
+    this.emit('error', error)
+  }
+
+  setState (state: DownloadState) {
+    this._state = state
+    this.emit('state', this._state)
+  }
+
+  updateProgress (bytes: number) {
+    this._bytesCompleted += bytes
+    this.emitProgress()
+  }
+
+  emitProgress () {
+    this.emit('progress', this._bytesCompleted, this._bytesTotal)
+  }
+
+  then<TResult1 = void, TResult2 = never> (
+    onfulfilled?: ((value: void) => TResult1 | PromiseLike<TResult1>) | null | undefined,
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined
+  ): Promise<TResult1 | TResult2> {
+    return this._promise.then(onfulfilled, onrejected)
+  }
+
+  catch<TResult = never> (
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined
+  ): Promise<void | TResult> {
+    return this._promise.catch(onrejected)
+  }
+
+  finally(onfinally?: (() => void) | null | undefined): Promise<void> {
+    return this._promise.finally(onfinally)
+  }
+
+  [Symbol.toStringTag]: string
 }
 
 export let DownloadCommand = {
