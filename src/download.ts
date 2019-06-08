@@ -8,7 +8,6 @@ import axios, { AxiosResponse } from 'axios'
 import PackageResolver, { Package } from './package'
 import { Task, TaskQueue } from './task'
 import { mkdirRecursively } from './mkdir'
-import { thisExpression, tsImportEqualsDeclaration } from '@babel/types';
 
 export interface DownloadManagerOptions {
   registry: string
