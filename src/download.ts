@@ -62,9 +62,10 @@ export class DownloadManager {
       }
 
       console.log(`Downloading ${pkg._id}` + addendum)
+      let status = this.tryDownload(pkg.dist.tarball, destination)
 
       try {
-        await this.tryDownload(pkg.dist.tarball, destination)
+        await status.promisify()
         return destination
       } catch(err) {
         console.error(err)
@@ -129,7 +130,7 @@ export enum DownloadState {
   Failed
 }
 
-export class DownloadStatus extends EventEmitter implements Promise<void> {
+export class DownloadStatus extends EventEmitter {
   readonly url: string
   readonly destination: string
 
@@ -138,26 +139,17 @@ export class DownloadStatus extends EventEmitter implements Promise<void> {
   private _bytesCompleted: number = 0
   private _error?: Error
 
-  private _promise: Promise<void>
-
   constructor (url: string, destination: string) {
     super()
 
     this.url = url
     this.destination = destination
-
-    this._promise = new Promise((resolve, reject) => {
-      this.on('finish', resolve)
-      this.on('error', reject)
-    })
   }
 
   get state () { return this._state }
   get bytesTotal () { return this._bytesTotal }
   get bytesCompleted () { return this._bytesCompleted }
   get error (): Error | undefined { return this._error }
-
-  get promise () : Promise<void> { return this._promise }
 
   setContentLength(bytes: number) {
     this._bytesTotal = bytes
@@ -194,24 +186,18 @@ export class DownloadStatus extends EventEmitter implements Promise<void> {
     this.emit('progress', this._bytesCompleted, this._bytesTotal)
   }
 
-  then<TResult1 = void, TResult2 = never> (
-    onfulfilled?: ((value: void) => TResult1 | PromiseLike<TResult1>) | null | undefined,
-    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null | undefined
-  ): Promise<TResult1 | TResult2> {
-    return this._promise.then(onfulfilled, onrejected)
-  }
+  promisify () : Promise<void> {
+    if (this.state == DownloadState.Completed) {
+      return Promise.resolve()
+    } else if (this.state == DownloadState.Failed) {
+      return Promise.reject(this.error)
+    }
 
-  catch<TResult = never> (
-    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null | undefined
-  ): Promise<void | TResult> {
-    return this._promise.catch(onrejected)
+    return new Promise((resolve, reject) => {
+      this.on('finish', resolve)
+      this.on('error', reject)
+    })
   }
-
-  finally(onfinally?: (() => void) | null | undefined): Promise<void> {
-    return this._promise.finally(onfinally)
-  }
-
-  [Symbol.toStringTag]: string
 }
 
 export let DownloadCommand = {

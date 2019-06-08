@@ -59,7 +59,12 @@ describe('DownloadManager', () =>  {
 
   test('download()', async () => {
     let manager = createManager()
-    manager.tryDownload = jest.fn().mockResolvedValue(null);
+
+    let mockPromisify = jest.fn()
+    manager.tryDownload = jest.fn().mockReturnValue({
+      promisify: mockPromisify
+    })
+
     await manager.download('dummy-package')
 
     expect(mockResolve).toHaveBeenCalledWith('dummy-package')
@@ -71,6 +76,8 @@ describe('DownloadManager', () =>  {
       'http://path/to/dummy-package-1.0.0.tgz',
       '.npm-sync-temp/dummy-package/dummy-package-1.0.0.tgz'
     )
+
+    expect(mockPromisify).toHaveBeenCalledTimes(1)
   })
 
   test('tryDownload()', async () => {
@@ -87,7 +94,8 @@ describe('DownloadManager', () =>  {
     ;(fs.createWriteStream as jest.Mock)
       .mockReturnValue(destinationStream)
 
-    let p = await manager.tryDownload('http://path/to/pkg', 'path/to/dest.tgz')
+    let status = manager.tryDownload('http://path/to/pkg', 'path/to/dest.tgz')
+    await status.promisify()
 
     expect(fs.createWriteStream).toHaveBeenCalledTimes(1)
     expect(fs.createWriteStream).toHaveBeenCalledWith('path/to/dest.tgz')
