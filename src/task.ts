@@ -3,6 +3,7 @@ type TaskReject = (reason?: any) => void
 
 export interface TaskQueueOptions {
   concurrency?: number
+  autoStart?: boolean
 }
 
 export class Task<T> {
@@ -42,11 +43,14 @@ export class TaskQueue {
   nextId: number = 0
   pendingTasks: Task<any>[] = []
   activeTasks: Set<Task<any>> = new Set()
+  started: boolean
 
   constructor (opts: TaskQueueOptions) {
     if (opts.concurrency) {
       this.concurrency = opts.concurrency
     }
+
+    this.started = opts.autoStart != null ? opts.autoStart : true
   }
 
   add<T> (payload?: T): Task<T> {
@@ -56,18 +60,31 @@ export class TaskQueue {
     return task
   }
 
+  start () {
+    this.started = true
+    this.runPending()
+  }
+
   markCompleted (task: Task<any>) {
     this.activeTasks.delete(task)
     this.runPending()
   }
 
   runPending () {
-    while (this.pendingTasks.length > 0 && this.activeTasks.size < this.concurrency) {
+    while (this.canRunMore()) {
       let next = this.pendingTasks.pop()
       if (next) {
         this.activeTasks.add(next)
         next.execute()
       }
     }
+  }
+
+  canRunMore() {
+    return (
+      this.started &&
+      this.pendingTasks.length > 0 && 
+      this.activeTasks.size < this.concurrency
+    )
   }
 }
