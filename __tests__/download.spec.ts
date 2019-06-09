@@ -1,105 +1,89 @@
-import * as fs from 'fs'
+import fs from 'fs'
 import axios from 'axios'
 
-import PackageResolver, { Package } from '../src/package'
-import { DownloadManager } from '../src/download'
-import { mkdirRecursively } from '../src/mkdir'
+import { Download, DownloadManager, DownloadState } from '../src/download'
 
 const MemoryStream = require('memorystream')
-
-const EXAMPLE_PACKAGE = {
-  '_id': 'dummy-package@1.0.0',
-  'name': 'dummy-package',
-
-  'dist': {
-    'tarball': 'http://path/to/dummy-package-1.0.0.tgz',
-    'shasum': 'abcdef'
-  },
-
-  'dependencies': { 'dependency': '^0.1.0' }
-}
-
-const mockResolve = jest.fn().mockResolvedValue(EXAMPLE_PACKAGE)
 
 jest.mock('fs')
 jest.mock('axios')
 
-jest.mock('../src/package', () => {
-  return jest.fn().mockImplementation(() => {
-    return {
-      resolve: mockResolve
-    }
-  })
-})
-
-jest.mock('../src/mkdir', () => {
-  return {
-    mkdirRecursively: jest.fn()
-  }
-})
-
-function createManager() {
-  return new DownloadManager({
-    registry: 'http://registry',
-    concurrency: 4,
-    attempts: 3
-  })
+function asMock(obj: any): jest.Mock {
+  return obj
 }
 
-describe('DownloadManager', () =>  {
+describe('DownloadManager', () => {
+  test('calling Task#done() when download finishes', async () => {
+    let mockDownload = jest.fn().mockResolvedValue({})
+
+    let manager = new DownloadManager({
+      autoStart: false,
+      downloadFactory: (_url, _destination) => ({ download: mockDownload })
+    })
+
+    let task = manager.download('http://path/to/file.txt', 'file.txt')
+    let mockDone = jest.spyOn(task, 'done')
+
+    manager.start()
+
+    await task.promise
+
+    expect(mockDownload).toHaveBeenCalled()
+    expect(mockDone).toHaveBeenCalled()
+  })
+})
+
+describe('Download', () => {
 
   beforeEach(() => {
-    ;(mkdirRecursively as jest.Mock).mockClear()
-
-    ;(PackageResolver as jest.Mock).mockClear()
-    mockResolve.mockClear()
-
-    ;(axios.get as jest.Mock).mockClear()
+    asMock(fs.createWriteStream).mockClear()
   })
 
-  test('download()', async () => {
-    let manager = createManager()
-
-    let mockPromisify = jest.fn()
-    manager.tryDownload = jest.fn().mockReturnValue({
-      promisify: mockPromisify
-    })
-
-    await manager.download('dummy-package')
-
-    expect(mockResolve).toHaveBeenCalledWith('dummy-package')
-    expect(mkdirRecursively).toHaveBeenCalledWith('.npm-sync-temp/dummy-package')
-
-    expect(manager.shouldDownload(EXAMPLE_PACKAGE)).toBeFalsy()
-
-    expect(manager.tryDownload).toHaveBeenCalledWith(
-      'http://path/to/dummy-package-1.0.0.tgz',
-      '.npm-sync-temp/dummy-package/dummy-package-1.0.0.tgz'
-    )
-
-    expect(mockPromisify).toHaveBeenCalledTimes(1)
-  })
-
-  test('tryDownload()', async () => {
-    let manager = createManager()
-    let destinationStream = new MemoryStream(null, { readable: false })
-
-    ;(axios.get as jest.Mock).mockResolvedValue({
+  test('successful download', async () => {
+    let remoteData = "dummy data"
+    asMock(axios.get).mockResolvedValue({
+      data: new MemoryStream(remoteData, { writable: false }),
       headers: {
-        'content-length': 18
-      },
-      data: new MemoryStream('dummy package data', { writable: false })
+        'content-length': remoteData.length
+      }
     })
 
-    ;(fs.createWriteStream as jest.Mock)
-      .mockReturnValue(destinationStream)
+    let localStream = new MemoryStream(null, { readable: false })
+    asMock(fs.createWriteStream).mockReturnValue(localStream)
 
-    let status = manager.tryDownload('http://path/to/pkg', 'path/to/dest.tgz')
-    await status.promisify()
+    let download = new Download('http://path/to/file.txt', 'file.txt')
+    let emitSpy = jest.spyOn(download, "emit")
 
-    expect(fs.createWriteStream).toHaveBeenCalledTimes(1)
-    expect(fs.createWriteStream).toHaveBeenCalledWith('path/to/dest.tgz')
+    expect(download.state).toEqual(DownloadState.Queued)
 
-    expect(destinationStream.toString()).toEqual('dummy package data')
+    let promise = download.download()
+    
+    expect(emitSpy).toHaveBeenNthCalledWith(emitSpy.mock.calls.length - 1, 'state', DownloadState.InProgress)
+    expect(emitSpy).toHaveBeenNthCalledWith(emitSpy.mock.calls.length, 'start')
+    expect(download.state).toEqual(DownloadState.InProgress)
+
+    await promise
+
+    expect(emitSpy).toHaveBeenNthCalledWith(emitSpy.mock.calls.length - 1, 'state', DownloadState.Completed)
+    expect(emitSpy).toHaveBeenNthCalledWith(emitSpy.mock.calls.length, 'finish')
+    expect(download.state).toEqual(DownloadState.Completed)
+
+    expect(localStream.toString()).toEqual(remoteData)
   })
+
+  test('gracefully handle failed downloads', (done) => {
+    asMock(axios.get).mockRejectedValue({ status: 404 })
+
+    let download = new Download('http://path/to/file.txt', 'file.txt')
+    expect(download.state).toEqual(DownloadState.Queued)
+
+    let promise = download.download()
+    expect(download.state).toEqual(DownloadState.InProgress)
+
+    promise.catch((err) => {
+      expect(download.state).toEqual(DownloadState.Failed)
+      done()
+    })
+  })
+
 })
