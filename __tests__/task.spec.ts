@@ -3,8 +3,8 @@ import { Task, TaskQueue } from '../src/task'
 test("test single task in queue", (done) => {
   let queue = new TaskQueue({ concurrency: 8 })
 
-  queue.add()
-    .then((task: Task) => {
+  queue.add().promise
+    .then((task) => {
       task.done()
       done()
     })
@@ -14,20 +14,20 @@ test("test concurrency", (done) => {
   let queue = new TaskQueue({ concurrency: 2 })
   let completed = 0
 
-  queue.add()
-    .then((task: Task) => {
+  queue.add().promise
+    .then((task) => {
       expect(queue.activeTasks.size).toBeLessThanOrEqual(2)
       task.done()
     })
 
-  queue.add()
-    .then((task: Task) => {
+  queue.add().promise
+    .then((task) => {
       expect(queue.activeTasks.size).toBeLessThanOrEqual(2)
       task.done()
     })
 
-  queue.add()
-    .then((task: Task) => {
+  queue.add().promise
+    .then((task) => {
       expect(queue.activeTasks.size).toEqual(1)
       expect(queue.pendingTasks.length).toEqual(0)
       task.done()
@@ -46,7 +46,7 @@ test("test concurrency 2", (done) => {
   for(let i = 0; i < spawn; i++) {
     let pendingTask = queue.add()
 
-    pendingTask.then((task) => {
+    pendingTask.promise.then((task) => {
       runningTasks++
 
       // Once we reach # of max concurrent tasks, expect to be running that many

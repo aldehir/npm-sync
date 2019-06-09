@@ -1,22 +1,17 @@
-type TaskResolve = (task?: Task) => void
+type TaskResolve<T> = (task?: Task<T>) => void
 type TaskReject = (reason?: any) => void
 
 export interface TaskQueueOptions {
   concurrency?: number
 }
 
-export class Task {
-  queue: TaskQueue
-  id: number
+export class Task<T> {
+  promise: Promise<Task<T>>
 
-  promise: Promise<Task>
-
-  private resolve!: TaskResolve
+  private resolve!: TaskResolve<T>
   private reject!: TaskReject
 
-  constructor (queue: TaskQueue, id: number) {
-    this.queue = queue
-    this.id = id
+  constructor (protected queue: TaskQueue, readonly id: number, public payload?: T) {
     this.promise = this.createPromise()
   }
 
@@ -34,7 +29,7 @@ export class Task {
   }
 
   private createPromise () {
-    return new Promise((resolve: TaskResolve, reject: TaskReject) => {
+    return new Promise((resolve: TaskResolve<T>, reject: TaskReject) => {
       this.resolve = resolve
       this.reject = reject
     })
@@ -45,8 +40,8 @@ export class TaskQueue {
   readonly concurrency: number = 8
 
   nextId: number = 0
-  pendingTasks: Task[] = []
-  activeTasks: Set<Task> = new Set()
+  pendingTasks: Task<any>[] = []
+  activeTasks: Set<Task<any>> = new Set()
 
   constructor (opts: TaskQueueOptions) {
     if (opts.concurrency) {
@@ -54,14 +49,14 @@ export class TaskQueue {
     }
   }
 
-  add (): Promise<Task> {
-    let task = new Task(this, ++this.nextId)
+  add<T> (payload?: T): Task<T> {
+    let task = new Task<T>(this, ++this.nextId, payload)
     this.pendingTasks.push(task)
     this.runPending()
-    return task.promise
+    return task
   }
 
-  markCompleted (task: Task) {
+  markCompleted (task: Task<any>) {
     this.activeTasks.delete(task)
     this.runPending()
   }
