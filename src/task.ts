@@ -53,18 +53,15 @@ export class Task<T> {
 }
 
 export class TaskQueue {
-  readonly concurrency: number = 8
+  readonly concurrency: number
 
   nextId: number = 0
   pendingTasks: Task<any>[] = []
   activeTasks: Set<Task<any>> = new Set()
   started: boolean
 
-  constructor (opts: TaskQueueOptions) {
-    if (opts.concurrency) {
-      this.concurrency = opts.concurrency
-    }
-
+  constructor (opts: TaskQueueOptions = {}) {
+    this.concurrency = opts.concurrency || 8
     this.started = opts.autoStart != null ? opts.autoStart : true
   }
 

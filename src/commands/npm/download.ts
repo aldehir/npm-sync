@@ -44,7 +44,7 @@ export default class NPMDownloader extends EventEmitter
 
   constructor (opts: NPMDownloaderOptions = {}) {
     super()
-    this.queue = opts.queue || new TaskQueue({ concurrency: 8 })
+    this.queue = opts.queue || new TaskQueue()
     this.resolver = opts.resolver || new PackageResolver()
     this.factory = opts.factory || defaultDownloadFactory
   }
