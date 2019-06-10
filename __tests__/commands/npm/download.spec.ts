@@ -6,7 +6,7 @@ const MemoryStream = require('memorystream')
 jest.mock('fs')
 jest.mock('@app/fs-utils')
 
-import NPMDownloader, { NPMDownloaderOptions } from '@app/commands/npm_commands/download'
+import NPMDownloader, { NPMDownloaderOptions } from '@app/commands/npm/download'
 
 const DUMMY_PACKAGE_JSON = {
   _id: 'dummy-package@1.0.0',

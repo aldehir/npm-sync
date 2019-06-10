@@ -1,5 +1,5 @@
 import { Argv } from 'yargs'
-import { NPMDownloadCommand } from './npm_commands/download'
+import { NPMDownloadCommand } from './download'
 
 export let NPMCommand = {
   command: 'npm <command>',
