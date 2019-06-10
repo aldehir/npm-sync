@@ -111,7 +111,7 @@ export default class NPMDownloader extends EventEmitter
       .add(() => download.download())
       .catch((err) => {
         console.trace(err)
-        let raise = new Error(`Failed to download ${pkg._id}, attempt ${attempt + 1} / ${this.maxAttempts}`)
+        let raise = new Error(`Unable to download ${pkg._id}, attempt ${attempt + 1} / ${this.maxAttempts}`)
         if (emitter) emitter.emit('error', raise)
         return this.attemptDownload(pkg, destination, emitter, attempt + 1)
       })
@@ -171,7 +171,7 @@ export default class NPMDownloader extends EventEmitter
       try {
         return await this.resolver.resolve(spec)
       } catch (err) {
-        let raise = new Error(`Failed to resolve ${spec}, attempt ${attempt + 1}/${this.maxAttempts}`)
+        let raise = new Error(`Unable to resolve ${spec}, attempt ${attempt + 1}/${this.maxAttempts}`)
         if (emitter) emitter.emit('error', raise)
       }
     }
@@ -196,11 +196,11 @@ function consoleOutput (downloader: NPMDownloaderInterface) {
     })
 
     pkg.on(`skip`, (pkg: Package) => {
-      console.log(chalk.yellow(`Skipping ${pkg._id}: package already downloaded`))
+      console.log(chalk.blue(`Skipping ${pkg._id}: package already downloaded`))
     })
 
     pkg.on('error', (err) => {
-      console.log(chalk.red(err))
+      console.warn(chalk.yellow(`Warning: ${err.message}`))
     })
 
     pkg.on(`download`, (pkg: Package, download: Downloadable) => {
@@ -213,7 +213,7 @@ function consoleOutput (downloader: NPMDownloaderInterface) {
       })
 
       download.on('error', (err: Error) => {
-        console.error(chalk.red(`Failed to download ${pkg.id}: ${err}`))
+        console.warn(chalk.yellow(`Warning: ${err.message}`))
       })
     })
   })
