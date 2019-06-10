@@ -1,4 +1,5 @@
-type TaskResolve<T> = (task?: Task<T>) => void
+type TaskCallback<T> = () => (T | Promise<T>)
+type TaskResolve<T> = (result: T) => void
 type TaskReject = (reason?: any) => void
 
 export interface TaskQueueOptions {
@@ -7,22 +8,36 @@ export interface TaskQueueOptions {
 }
 
 export class Task<T> {
-  promise: Promise<Task<T>>
+  promise: Promise<T>
 
   private resolve!: TaskResolve<T>
   private reject!: TaskReject
 
-  constructor (protected queue: TaskQueue, readonly id: number, public payload?: T) {
+  constructor (
+    protected queue: TaskQueue,
+    readonly id: number,
+    public func: TaskCallback<T>
+  ) {
     this.promise = this.createPromise()
   }
 
   execute () {
-    this.resolve(this)
-  }
+    let result
 
-  cancel (reason?: any) {
-    this.done()
-    this.reject(reason)
+    try {
+      result = this.func()
+    } catch(err) {
+      this.reject(err)
+      return
+    }
+
+    if (result instanceof Promise) {
+      result
+        .then(this.resolve)
+        .catch(this.reject)
+    } else {
+      this.resolve(result)
+    }
   }
 
   done () {
@@ -33,7 +48,7 @@ export class Task<T> {
     return new Promise((resolve: TaskResolve<T>, reject: TaskReject) => {
       this.resolve = resolve
       this.reject = reject
-    })
+    }).finally(() => this.done())
   }
 }
 
@@ -53,11 +68,11 @@ export class TaskQueue {
     this.started = opts.autoStart != null ? opts.autoStart : true
   }
 
-  add<T> (payload?: T): Task<T> {
-    let task = new Task<T>(this, ++this.nextId, payload)
+  add<T> (callback: TaskCallback<T>): Promise<T> {
+    let task = new Task<T>(this, ++this.nextId, callback)
     this.pendingTasks.push(task)
     this.runPending()
-    return task
+    return task.promise
   }
 
   start () {

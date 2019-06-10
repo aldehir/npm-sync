@@ -79,9 +79,7 @@ export default class NPMDownloader extends EventEmitter
     let download = this.factory(pkg.dist.tarball, destination)
     emitter.emit('download', pkg, download)
 
-    return this.queue.add().promise.then((task) =>
-      download.download().finally(() => task.done())
-    )
+    return this.queue.add(() => download.download())
   }
 
   async shouldSkip (pkg: Package) {
@@ -125,11 +123,8 @@ export default class NPMDownloader extends EventEmitter
   ): Promise<Map<string, Package>> {
     let pendingDownloads = outResults || new Map()
 
-    return this.queue.add(packageSpec).promise
-      .then((task) =>
-        this.resolvePackage(packageSpec)
-          .finally(() => task.done())
-      )
+    return this.queue
+      .add(() => this.resolvePackage(packageSpec))
       .then((pkg) => {
         if (pendingDownloads.has(pkg._id)) return []
         pendingDownloads.set(pkg._id, pkg)

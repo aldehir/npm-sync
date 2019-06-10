@@ -3,36 +3,44 @@ import { Task, TaskQueue } from '../src/task'
 test("test single task in queue", (done) => {
   let queue = new TaskQueue({ concurrency: 8 })
 
-  queue.add().promise
-    .then((task) => {
-      task.done()
+  queue.add(() => {})
+    .then(() => {
       done()
     })
+})
+
+test('task return types', () => {
+  let queue = new TaskQueue({ concurrency: 1 })
+
+  let promise1 = queue.add(() => Promise.reject('error'))
+  expect(promise1).rejects.toEqual('error')
+
+  let promise2 = queue.add(() => 'abc')
+  expect(promise2).resolves.toEqual('abc')
+
+  let promise3 = queue.add(() => Promise.resolve('abc'))
+  expect(promise3).resolves.toEqual('abc')
+
+  let promise4 = queue.add(() => {})
+  expect(promise4).resolves.toEqual(undefined)
 })
 
 test("test concurrency", (done) => {
   let queue = new TaskQueue({ concurrency: 2 })
   let completed = 0
 
-  queue.add().promise
-    .then((task) => {
-      expect(queue.activeTasks.size).toBeLessThanOrEqual(2)
-      task.done()
-    })
+  queue.add(() => {
+    expect(queue.activeTasks.size).toBeLessThanOrEqual(2)
+  })
 
-  queue.add().promise
-    .then((task) => {
-      expect(queue.activeTasks.size).toBeLessThanOrEqual(2)
-      task.done()
-    })
+  queue.add(() => {
+    expect(queue.activeTasks.size).toBeLessThanOrEqual(2)
+  })
 
-  queue.add().promise
-    .then((task) => {
-      expect(queue.activeTasks.size).toEqual(1)
-      expect(queue.pendingTasks.length).toEqual(0)
-      task.done()
-      done()
-    })
+  queue.add(() => {
+    expect(queue.pendingTasks.length).toEqual(0)
+    done()
+  })
 })
 
 test("test concurrency 2", (done) => {
@@ -43,10 +51,10 @@ test("test concurrency 2", (done) => {
 
   let queue = new TaskQueue({ concurrency })
 
-  for(let i = 0; i < spawn; i++) {
-    let pendingTask = queue.add()
+  let allTasks = []
 
-    pendingTask.promise.then((task) => {
+  for(let i = 0; i < spawn; i++) {
+    allTasks.push(queue.add(() => {
       runningTasks++
 
       // Once we reach # of max concurrent tasks, expect to be running that many
@@ -58,16 +66,16 @@ test("test concurrency 2", (done) => {
       expect(runningTasks).toBeLessThanOrEqual(concurrency)
 
       // Delay completion of task
-      process.nextTick(() => {
-        task.done()
-
-        runningTasks--
-        tasksExecuted++
-
-        if (tasksExecuted == spawn) {
-          done()
-        }
+      return new Promise((resolve, reject) => {
+        process.nextTick(() => {
+          runningTasks--
+          tasksExecuted++
+          resolve()
+        })
       })
-    })
+    }))
   }
+
+  Promise.all(allTasks)
+    .then(() => done())
 })
