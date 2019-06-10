@@ -264,7 +264,7 @@ export let NPMDownloadCommand = {
 
     for (let pkg of argv.package) {
       downloader.download(pkg)
-        .catch(() => {})
+        .catch((err) => console.error(chalk.red(err)))
     }
   }
 }
