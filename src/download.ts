@@ -20,11 +20,11 @@ export interface Downloadable {
   download (): Promise<void>
   promisify (): Promise<void>
 
-  on (event: 'state', callback: (state: DownloadState) => void): void
-  on (event: 'start', callback: () => void): void
-  on (event: 'progress', callback: (completed: number, total: number) => void): void
-  on (event: 'finish', callback: () => void): void
-  on (event: 'error', callback: (err: Error) => void): void
+  on (event: 'state', callback: (state: DownloadState) => void): this
+  on (event: 'start', callback: () => void): this
+  on (event: 'progress', callback: (completed: number, total: number) => void): this
+  on (event: 'finish', callback: () => void): this
+  on (event: 'error', callback: (err: Error) => void): this
 }
 
 export function defaultDownloadFactory (url: string | URL, destination: string): Downloadable {
