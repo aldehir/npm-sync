@@ -18,7 +18,6 @@ export interface Downloadable {
   destination: string
 
   download (): Promise<void>
-  promisify (): Promise<void>
 
   on (event: 'state', callback: (state: DownloadState) => void): this
   on (event: 'start', callback: () => void): this
@@ -46,12 +45,17 @@ export class Download extends EventEmitter implements Downloadable {
   get bytesCompleted () { return this._bytesCompleted }
   get error (): Error | undefined { return this._error }
 
-  download () {
+  download (): Promise<void> {
     let writeStream = fs.createWriteStream(this.destination)
 
     let url = this.url instanceof URL
       ? url_format(this.url)
       : this.url
+
+    let promise: Promise<void> = new Promise((resolve, reject) => {
+      this.on('finish', () => resolve())
+      this.on('error', (err) => reject(err))
+    })
 
     axios.get(url, { responseType: 'stream' })
       .then((resp) => this.handleResponse(resp, writeStream))
@@ -59,7 +63,7 @@ export class Download extends EventEmitter implements Downloadable {
 
     this.setStarted()
 
-    return this.promisify()
+    return promise
   }
 
   handleResponse (response: AxiosResponse, writeTo: Writable) {
@@ -79,19 +83,6 @@ export class Download extends EventEmitter implements Downloadable {
 
     stream.on('error', (err: Error) => {
       this.setFailed(err)
-    })
-  }
-
-  promisify () : Promise<void> {
-    if (this.state == DownloadState.Completed) {
-      return Promise.resolve()
-    } else if (this.state == DownloadState.Failed) {
-      return Promise.reject(this.error)
-    }
-
-    return new Promise((resolve, reject) => {
-      this.on('finish', resolve)
-      this.on('error', reject)
     })
   }
 

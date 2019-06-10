@@ -79,10 +79,7 @@ export default class NPMDownloader extends EventEmitter
     let destination = this.destinationPath(pkg)
     await ensureDirectory(path.dirname(destination))
 
-    let download = this.factory(pkg.dist.tarball, destination)
-    emitter.emit('download', pkg, download)
-
-    return this.queue.add(() => download.download())
+    return this.attemptDownload(pkg, destination, emitter)
   }
 
   async shouldSkip (pkg: Package) {
@@ -95,6 +92,29 @@ export default class NPMDownloader extends EventEmitter
     }
 
     return false
+  }
+
+  attemptDownload (
+    pkg: Package,
+    destination: string,
+    emitter?: PackageEmitter,
+    attempt: number = 0
+  ): Promise<void> {
+    if (attempt >= this.maxAttempts) {
+      return Promise.reject(new Error(`Exceeded number of attempts to download ${pkg._id}`))
+    }
+
+    let download = this.factory(pkg.dist.tarball, destination)
+    if (emitter) emitter.emit('download', pkg, download)
+
+    return this.queue
+      .add(() => download.download())
+      .catch((err) => {
+        console.trace(err)
+        let raise = new Error(`Failed to download ${pkg._id}, attempt ${attempt + 1} / ${this.maxAttempts}`)
+        if (emitter) emitter.emit('error', raise)
+        return this.attemptDownload(pkg, destination, emitter, attempt + 1)
+      })
   }
 
   checksumMatches (path: string, checksum: string): Promise<boolean> {

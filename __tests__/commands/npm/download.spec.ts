@@ -70,8 +70,7 @@ let downloaderOptions: NPMDownloaderOptions = {
       dest: dest,
 
       on: mockOn,
-      download: mockDownload,
-      promisify: jest.fn().mockResolvedValue(null)
+      download: mockDownload
     })
   )
 }
