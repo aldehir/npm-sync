@@ -37,7 +37,7 @@ export function parsePackageString (pkg: string): PackageSpec {
 
   if (delimiterPosition > 0 && delimiterPosition < pkg.length) {
     let name = pkg.substring(0, delimiterPosition)
-    let version = pkg.substring(0, delimiterPosition)
+    let version = pkg.substring(delimiterPosition + 1)
 
     return new PackageSpec(name, version)
   }
