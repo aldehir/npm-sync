@@ -33,30 +33,23 @@ export default class NPMDownloader extends EventEmitter {
     console.log(chalk.magenta(`Downloading ${packagesToDownload.size} packages`))
 
     let waitFor = []
-
     for (let [, pkg] of packagesToDownload) {
-      waitFor.push(this.singleDownload(pkg).then(
-        (download) => {
-          this.attachToDownload(pkg, download)
-          return download.promisify()
-        }
-      ))
+      waitFor.push(this.singleDownload(pkg))
     }
 
     await Promise.all(waitFor)
   }
 
-  async singleDownload (pkg: Package): Promise<Downloadable> {
+  async singleDownload (pkg: Package): Promise<void> {
     let destination = this.destinationPath(pkg)
     await ensureDirectory(path.dirname(destination))
 
     let download = this.factory(pkg.dist.tarball, destination)
+    this.attachToDownload(pkg, download)
 
-    this.queue.add().promise.then((task) =>
+    return this.queue.add().promise.then((task) =>
       download.download().finally(() => task.done())
     )
-
-    return download
   }
 
   attachToDownload (pkg: Package, download: Downloadable) {
@@ -81,8 +74,7 @@ export default class NPMDownloader extends EventEmitter {
 
     return this.queue.add(packageSpec).promise
       .then((task) => {
-        console.log(chalk.gray(`Resolving dependencies for ${task.payload!}`))
-        return this.resolver.resolve(task.payload!)
+        return this.resolver.resolve(packageSpec)
           .finally(() => task.done())
       })
       .then((pkg) => {
@@ -92,6 +84,9 @@ export default class NPMDownloader extends EventEmitter {
         return Promise.all(Object.entries(pkg.dependencies || {})
           .map((entry) => this.fetchPackagesToDownload(new PackageSpec(...entry), pendingDownloads))
         )
+      })
+      .catch((err) => {
+        console.error(chalk.red(`Failed to get dependencies for ${packageSpec}: ${err}`))
       })
       .then((depLists) => {
         return pendingDownloads
@@ -131,7 +126,7 @@ export let NPMDownloadCommand = {
 
       .alias('c', 'concurrency')
         .number('c')
-        .default('c', 8)
+        .default('c', 4)
         .describe('c', 'Max number of downloads')
 
       .help('h')
