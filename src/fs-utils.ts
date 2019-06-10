@@ -5,7 +5,7 @@ import util from 'util'
 const exists = util.promisify(fs.exists)
 const mkdir = util.promisify(fs.mkdir)
 
-export function ascending(filepath: string) {
+export function ascending (filepath: string) {
   let paths: string[] = []
 
   let current = filepath
@@ -17,7 +17,7 @@ export function ascending(filepath: string) {
   return paths.reverse()
 }
 
-export async function ensureDirectory(filepath: string) {
+export async function ensureDirectory (filepath: string) {
   let paths = ascending(filepath)
 
   for (let p of paths) {
