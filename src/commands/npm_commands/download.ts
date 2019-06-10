@@ -78,6 +78,7 @@ export default class NPMDownloader extends EventEmitter {
 
     return this.queue.add(packageSpec).promise
       .then((task) => {
+        console.log(chalk.gray(`Resolving dependencies for ${task.payload!}`))
         return this.resolver.resolve(task.payload!)
           .finally(() => task.done())
       })
@@ -140,7 +141,15 @@ export let NPMDownloadCommand = {
   },
 
   handler (argv: any) {
-    console.log('download.ts')
-    console.dir(argv)
+    let options = {
+      queue: new TaskQueue({ concurrency: argv.concurrency }),
+      resolver: new PackageResolver(argv.registry)
+    }
+
+    let downloader = new NPMDownloader(options)
+
+    for (let pkg of argv.package) {
+      downloader.download(pkg)
+    }
   }
 }
