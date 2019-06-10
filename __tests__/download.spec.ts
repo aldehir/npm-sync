@@ -36,7 +36,7 @@ describe('Download', () => {
     expect(download.state).toEqual(DownloadState.Queued)
 
     let promise = download.download()
-    
+
     expect(emitSpy).toHaveBeenNthCalledWith(emitSpy.mock.calls.length - 1, 'state', DownloadState.InProgress)
     expect(emitSpy).toHaveBeenNthCalledWith(emitSpy.mock.calls.length, 'start')
     expect(download.state).toEqual(DownloadState.InProgress)

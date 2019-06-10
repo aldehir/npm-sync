@@ -83,7 +83,7 @@ export class TaskQueue {
   canRunMore() {
     return (
       this.started &&
-      this.pendingTasks.length > 0 && 
+      this.pendingTasks.length > 0 &&
       this.activeTasks.size < this.concurrency
     )
   }
