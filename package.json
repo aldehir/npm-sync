@@ -4,8 +4,8 @@
   "description": "NPM Synchronization Tool",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc -p .",
-    "watch": "tsc -p . -w",
+    "build": "tsc -p ./tsconfig.build.json",
+    "watch": "tsc -p ./tsconfig.build.json -w",
     "test": "jest"
   },
   "author": "Aldehir Rojas",
