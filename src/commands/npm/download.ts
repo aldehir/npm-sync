@@ -16,7 +16,28 @@ export interface NPMDownloaderOptions {
   factory?: DownloadFactory
 }
 
-export default class NPMDownloader extends EventEmitter {
+export interface NPMDownloaderInterface {
+  on (event: "download", callback: (packageEmitter: PackageEmitter) => void): this
+}
+
+export interface PackageEmitterInterface {
+  on (event: "fetch-metadata", callback: () => void): this
+  on (event: "metadata", callback: (packages: Map<string, Package>) => void): this
+  on (event: "download", callback: (pkg: Package, download: Downloadable) => void): this
+  on (event: "skip", callback: (pkg: Package) => void): this
+}
+
+export class PackageEmitter extends EventEmitter
+    implements PackageEmitterInterface {
+
+  constructor (readonly spec: string | PackageSpec) {
+    super()
+  }
+}
+
+export default class NPMDownloader extends EventEmitter
+    implements NPMDownloaderInterface {
+
   queue: TaskQueue
   resolver: PackageResolver
   factory: DownloadFactory
@@ -29,25 +50,29 @@ export default class NPMDownloader extends EventEmitter {
   }
 
   async download (packageSpec: string | PackageSpec) {
-    console.log(chalk.magenta(`Fetching package metadata for ${packageSpec}...`))
-    let packagesToDownload = await this.fetchPackagesToDownload(packageSpec)
+    let emitter = new PackageEmitter(packageSpec)
 
-    console.log(chalk.magenta(`Downloading ${packagesToDownload.size} packages`))
+    this.emit('download', emitter)
+    emitter.emit('fetch-metadata')
+
+    let packagesToDownload = await this.fetchPackagesToDownload(packageSpec)
+    emitter.emit('metadata', packagesToDownload)
 
     let waitFor = []
     for (let [, pkg] of packagesToDownload) {
-      waitFor.push(this.singleDownload(pkg))
+      waitFor.push(this.singleDownload(emitter, pkg))
     }
 
     await Promise.all(waitFor)
+    emitter.emit('end')
   }
 
-  async singleDownload (pkg: Package): Promise<void> {
+  async singleDownload (emitter: PackageEmitter, pkg: Package): Promise<void> {
     let destination = this.destinationPath(pkg)
 
     if (await exists(destination)) {
       if (await this.checksumMatches(destination, pkg.dist.shasum)) {
-        console.log(chalk.yellow(`Skipping ${pkg._id}: already exists`))
+        emitter.emit('skip', pkg)
         return
       }
     }
@@ -55,7 +80,7 @@ export default class NPMDownloader extends EventEmitter {
     await ensureDirectory(path.dirname(destination))
 
     let download = this.factory(pkg.dist.tarball, destination)
-    this.attachToDownload(pkg, download)
+    emitter.emit('download', pkg, download)
 
     return this.queue.add().promise.then((task) =>
       download.download().finally(() => task.done())
@@ -85,20 +110,6 @@ export default class NPMDownloader extends EventEmitter {
     })
   }
 
-  attachToDownload (pkg: Package, download: Downloadable) {
-    download.on('start', () => {
-      console.log(chalk.gray(`Downloading ${pkg._id} (${download.url} -> ${download.destination})`))
-    })
-
-    download.on('finish', () => {
-      console.log(chalk.green(`Downloaded ${pkg._id} -> ${download.destination}`))
-    })
-
-    download.on('error', (err) => {
-      console.log(chalk.red(`Failed to download ${pkg._id}: ${err}`))
-    })
-  }
-
   fetchPackagesToDownload (
     packageSpec: string | PackageSpec,
     outResults?: Map<string, Package>
@@ -109,17 +120,20 @@ export default class NPMDownloader extends EventEmitter {
       .then((task) => {
         return this.resolver.resolve(packageSpec)
           .finally(() => task.done())
+          .catch((err) => {
+            throw new Error(`Failed to fetch dependencies for ${packageSpec}: ${err.message}`)
+          })
       })
       .then((pkg) => {
         if (pendingDownloads.has(pkg._id)) return []
         pendingDownloads.set(pkg._id, pkg)
 
         return Promise.all(Object.entries(pkg.dependencies || {})
-          .map((entry) => this.fetchPackagesToDownload(new PackageSpec(...entry), pendingDownloads))
+          .map((entry) => this.fetchPackagesToDownload(
+            new PackageSpec(...entry),
+            pendingDownloads
+          ))
         )
-      })
-      .catch((err) => {
-        console.error(chalk.red(`Failed to get dependencies for ${packageSpec}: ${err}`))
       })
       .then((depLists) => {
         return pendingDownloads
@@ -174,11 +188,37 @@ export let NPMDownloadCommand = {
 
     let downloader = new NPMDownloader(options)
 
+    downloader.on('download', (pkg: PackageEmitter) => {
+      pkg.on('fetch-metadata', () => {
+        console.log(chalk.magenta(`Fetching metadata for ${pkg.spec}`))
+      })
+
+      pkg.on('metadata', (packages: Map<string, Package>) => {
+        console.log(chalk.magenta(`Downloading ${packages.size} packages`))
+      })
+
+      pkg.on(`skip`, (pkg: Package) => {
+        console.log(chalk.yellow(`Skipping ${pkg._id}: package already downloaded`))
+      })
+
+      pkg.on(`download`, (pkg: Package, download: Downloadable) => {
+        download.on('start', () => {
+          console.log(chalk.gray(`Downloading ${pkg._id} (${download.url} -> ${download.destination})`))
+        })
+
+        download.on('finish', () => {
+          console.log(chalk.green(`Downloaded ${pkg._id} (${download.destination})`))
+        })
+
+        download.on('error', (err: Error) => {
+          console.error(chalk.red(`Failed to download ${pkg.id}: ${err}`))
+        })
+      })
+    })
+
     for (let pkg of argv.package) {
       downloader.download(pkg)
-        .catch((err) => {
-          console.log(chalk.red(`Error downloading ${pkg}: ${err}`))
-        })
+        .catch((err) => console.error(chalk.red(err)))
     }
   }
 }
