@@ -73,8 +73,11 @@ export default class NPMDownloader extends EventEmitter {
     })
   }
 
-  fetchPackagesToDownload (packageSpec: string | PackageSpec): Promise<Map<string, Package>> {
-    let pendingDownloads: Map<string, Package> = new Map()
+  fetchPackagesToDownload (
+    packageSpec: string | PackageSpec,
+    outResults?: Map<string, Package>
+  ): Promise<Map<string, Package>> {
+    let pendingDownloads = outResults || new Map()
 
     return this.queue.add(packageSpec).promise
       .then((task) => {
@@ -83,19 +86,14 @@ export default class NPMDownloader extends EventEmitter {
           .finally(() => task.done())
       })
       .then((pkg) => {
+        if (pendingDownloads.has(pkg._id)) return []
         pendingDownloads.set(pkg._id, pkg)
 
         return Promise.all(Object.entries(pkg.dependencies || {})
-          .map((entry) => this.fetchPackagesToDownload(new PackageSpec(...entry)))
+          .map((entry) => this.fetchPackagesToDownload(new PackageSpec(...entry), pendingDownloads))
         )
       })
       .then((depLists) => {
-        for (let deps of depLists) {
-          for (let [pkgId, pkg] of deps) {
-            pendingDownloads.set(pkgId, pkg)
-          }
-        }
-
         return pendingDownloads
       })
   }
