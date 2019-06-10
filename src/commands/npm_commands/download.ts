@@ -3,9 +3,9 @@ import { EventEmitter } from 'events'
 import { Argv } from 'yargs'
 import chalk from 'chalk'
 
-import { TaskQueue } from '@app/task'
-import { ensureDirectory } from '@app/fs-utils'
-import { defaultDownloadFactory, DownloadFactory, Downloadable } from '@app/download'
+import { TaskQueue } from '../../task'
+import { ensureDirectory } from '../../fs-utils'
+import { defaultDownloadFactory, DownloadFactory, Downloadable } from '../../download'
 import PackageResolver, { Package, PackageSpec } from './package'
 
 export interface NPMDownloaderOptions {

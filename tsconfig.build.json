@@ -5,14 +5,10 @@
     "module": "commonjs",
     "outDir": "./dist",
     "rootDir": "./src",
-    "baseUrl": ".",
     "composite": true,
     "strict": true,
     "moduleResolution": "node",
-    "esModuleInterop": true,
-    "paths": {
-      "@app/*": [ "src/*" ]
-    }
+    "esModuleInterop": true
   },
   "include": [
     "src/**/*.ts"
