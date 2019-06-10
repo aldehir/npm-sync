@@ -2,8 +2,8 @@ import fs from 'fs'
 import path from 'path'
 import util from 'util'
 
-const exists = util.promisify(fs.exists)
-const mkdir = util.promisify(fs.mkdir)
+export const exists = util.promisify(fs.exists)
+export const mkdir = util.promisify(fs.mkdir)
 
 export function ascending (filepath: string) {
   let paths: string[] = []

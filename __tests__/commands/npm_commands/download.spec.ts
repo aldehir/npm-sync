@@ -1,5 +1,9 @@
+import fs from 'fs'
 import * as fsUtils from '@app/fs-utils'
 
+const MemoryStream = require('memorystream')
+
+jest.mock('fs')
 jest.mock('@app/fs-utils')
 
 import NPMDownloader, { NPMDownloaderOptions } from '@app/commands/npm_commands/download'
@@ -82,7 +86,9 @@ beforeEach(() => {
 test('dowloading package with dependencies', async () => {
   let downloader = new NPMDownloader(downloaderOptions)
 
+  ;(fsUtils.exists as jest.Mock).mockResolvedValue(false)
   ;(fsUtils.ensureDirectory as jest.Mock).mockResolvedValue(null)
+  downloader.checksumMatches = jest.fn().mockResolvedValue(false)
 
   await downloader.download('dummy-package@latest')
 
@@ -95,6 +101,19 @@ test('dowloading package with dependencies', async () => {
   for (let [url, dest] of expected) {
     expect(downloaderOptions.factory).toHaveBeenCalledWith(url, dest)
   }
+})
+
+test('calculating checksum', async () => {
+  let downloader = new NPMDownloader(downloaderOptions)
+
+  ;(fs.createReadStream as jest.Mock).mockReturnValue(
+    new MemoryStream('dummy data', { writable: false })
+  )
+
+  let result = await downloader.checksumMatches('dummy/path', '611ff54ef4d8389cf982da9516804906d99389b6')
+
+  expect(fs.createReadStream).toHaveBeenCalledWith('dummy/path')
+  expect(result).toBeTruthy()
 })
 
 test('fetching packages to download', async () => {

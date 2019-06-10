@@ -1,10 +1,12 @@
+import fs from 'fs'
 import path from 'path'
+import crypto from 'crypto'
 import { EventEmitter } from 'events'
 import { Argv } from 'yargs'
 import chalk from 'chalk'
 
 import { TaskQueue } from '../../task'
-import { ensureDirectory } from '../../fs-utils'
+import { exists, ensureDirectory } from '../../fs-utils'
 import { defaultDownloadFactory, DownloadFactory, Downloadable } from '../../download'
 import PackageResolver, { Package, PackageSpec } from './package'
 
@@ -42,6 +44,14 @@ export default class NPMDownloader extends EventEmitter {
 
   async singleDownload (pkg: Package): Promise<void> {
     let destination = this.destinationPath(pkg)
+
+    if (await exists(destination)) {
+      if (await this.checksumMatches(destination, pkg.dist.shasum)) {
+        console.log(chalk.yellow(`Skipping ${pkg._id}: already exists`))
+        return
+      }
+    }
+
     await ensureDirectory(path.dirname(destination))
 
     let download = this.factory(pkg.dist.tarball, destination)
@@ -50,6 +60,29 @@ export default class NPMDownloader extends EventEmitter {
     return this.queue.add().promise.then((task) =>
       download.download().finally(() => task.done())
     )
+  }
+
+  checksumMatches (path: string, checksum: string): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+      let hash = crypto.createHash('sha1')
+      let input = fs.createReadStream(path)
+
+      input.on('readable', () => {
+        let data
+        while (data = input.read(32)) {
+          hash.update(data)
+        }
+      })
+
+      input.on('end', () => {
+        let actualChecksum = hash.digest('hex').toLowerCase()
+        resolve(actualChecksum === checksum.toLowerCase())
+      })
+
+      input.on('error', (err) => {
+        reject(err)
+      })
+    })
   }
 
   attachToDownload (pkg: Package, download: Downloadable) {
@@ -143,6 +176,9 @@ export let NPMDownloadCommand = {
 
     for (let pkg of argv.package) {
       downloader.download(pkg)
+        .catch((err) => {
+          console.log(chalk.red(`Error downloading ${pkg}: ${err}`))
+        })
     }
   }
 }
