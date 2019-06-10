@@ -3,3 +3,6 @@ node_modules/
 # TypeScript output
 dist/
 *.tsbuildinfo
+
+# Program output
+downloads/
