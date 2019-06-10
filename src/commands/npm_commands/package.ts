@@ -1,11 +1,6 @@
 import semver from 'semver'
 import axios, { AxiosResponse } from 'axios'
 
-export interface PackageSpec {
-  name: string
-  version: string
-}
-
 export interface Package {
   _id: string
 
@@ -29,17 +24,25 @@ export interface PackageDependencies {
   [name: string]: string
 }
 
+export class PackageSpec {
+  constructor(readonly name: string, readonly version: string) { }
+
+  toString() {
+    return `${this.name}@${this.version}`
+  }
+}
+
 export function parsePackageString (pkg: string): PackageSpec {
   let delimiterPosition = pkg.lastIndexOf('@')
 
   if (delimiterPosition > 0 && delimiterPosition < pkg.length) {
-    return {
-      name: pkg.substring(0, delimiterPosition),
-      version: pkg.substring(delimiterPosition + 1)
-    }
+    let name = pkg.substring(0, delimiterPosition)
+    let version = pkg.substring(0, delimiterPosition)
+
+    return new PackageSpec(name, version)
   }
 
-  return { name: pkg, version: "latest" }
+  return new PackageSpec(pkg, 'latest')
 }
 
 export function buildPackage (info: any) {
@@ -57,12 +60,12 @@ export function buildPackage (info: any) {
 export default class PackageResolver {
   registry: string
 
-  constructor (registry: string) {
+  constructor (registry: string = "http://registry.npmjs.com") {
     this.registry = registry
   }
 
-  resolve (pkg: string) {
-    let spec = parsePackageString(pkg)
+  resolve (pkg: string | PackageSpec) {
+    let spec = typeof pkg == 'string' ? parsePackageString(pkg) : pkg
 
     return axios.get(`${this.registry}/${spec.name}`)
       .then((response) => this.handleResponse(spec, response))

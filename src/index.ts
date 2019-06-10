@@ -1,10 +1,10 @@
 import * as yargs from 'yargs'
 
-import { DownloadCommand } from './download'
+import { NPMCommand } from './commands/npm'
 
 yargs
   .scriptName('npm-sync')
-  .command(DownloadCommand)
+  .command(NPMCommand)
   .demandCommand(1, 'Please specify a command')
   .help('h')
   .alias('h', 'help')
