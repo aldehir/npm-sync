@@ -11,6 +11,7 @@ import { defaultDownloadFactory, DownloadFactory, Downloadable } from '../../dow
 import PackageResolver, { Package, PackageSpec } from './package'
 
 export interface NPMDownloaderOptions {
+  maxAttempts?: number
   queue?: TaskQueue
   resolver?: PackageResolver
   factory?: DownloadFactory
@@ -38,12 +39,14 @@ export class PackageEmitter extends EventEmitter
 export default class NPMDownloader extends EventEmitter
     implements NPMDownloaderInterface {
 
+  maxAttempts: number
   queue: TaskQueue
   resolver: PackageResolver
   factory: DownloadFactory
 
   constructor (opts: NPMDownloaderOptions = {}) {
     super()
+    this.maxAttempts = opts.maxAttempts || 3
     this.queue = opts.queue || new TaskQueue()
     this.resolver = opts.resolver || new PackageResolver()
     this.factory = opts.factory || defaultDownloadFactory
@@ -55,7 +58,7 @@ export default class NPMDownloader extends EventEmitter
     this.emit('download', emitter)
     emitter.emit('fetch-metadata')
 
-    let packagesToDownload = await this.fetchPackagesToDownload(packageSpec)
+    let packagesToDownload = await this.fetchPackagesToDownload(packageSpec, emitter)
     emitter.emit('metadata', packagesToDownload)
 
     let waitFor = []
@@ -119,12 +122,13 @@ export default class NPMDownloader extends EventEmitter
 
   fetchPackagesToDownload (
     packageSpec: string | PackageSpec,
+    emitter?: PackageEmitter,
     outResults?: Map<string, Package>
   ): Promise<Map<string, Package>> {
     let pendingDownloads = outResults || new Map()
 
     return this.queue
-      .add(() => this.resolvePackage(packageSpec))
+      .add(() => this.resolvePackage(packageSpec, emitter))
       .then((pkg) => {
         if (pendingDownloads.has(pkg._id)) return []
         pendingDownloads.set(pkg._id, pkg)
@@ -132,6 +136,7 @@ export default class NPMDownloader extends EventEmitter
         return Promise.all(Object.entries(pkg.dependencies || {})
           .map((entry) => this.fetchPackagesToDownload(
             new PackageSpec(...entry),
+            emitter,
             pendingDownloads
           ))
         )
@@ -141,11 +146,19 @@ export default class NPMDownloader extends EventEmitter
       })
   }
 
-  resolvePackage (spec: string | PackageSpec): Promise<Package> {
-    return this.resolver.resolve(spec)
-      .catch((err) => {
-        throw new Error(`Failed to fetch dependencies for ${spec}: ${err.message}`)
-      })
+  async resolvePackage (spec: string | PackageSpec, emitter?: PackageEmitter): Promise<Package> {
+    let raise
+
+    for (let attempt = 0; attempt < this.maxAttempts; attempt++) {
+      try {
+        return await this.resolver.resolve(spec)
+      } catch (err) {
+        raise = new Error(`Failed to resolve ${spec} attempt ${attempt + 1}/${this.maxAttempts}`)
+        if (emitter) emitter.emit('error', raise)
+      }
+    }
+
+    throw raise
   }
 
   destinationPath (pkg: Package) {
@@ -166,6 +179,10 @@ function consoleOutput (downloader: NPMDownloaderInterface) {
 
     pkg.on(`skip`, (pkg: Package) => {
       console.log(chalk.yellow(`Skipping ${pkg._id}: package already downloaded`))
+    })
+
+    pkg.on('error', (err) => {
+      console.log(chalk.red(err))
     })
 
     pkg.on(`download`, (pkg: Package, download: Downloadable) => {
@@ -229,7 +246,7 @@ export let NPMDownloadCommand = {
 
     for (let pkg of argv.package) {
       downloader.download(pkg)
-        .catch((err) => console.error(chalk.red(err)))
+        .catch(() => {})
     }
   }
 }
