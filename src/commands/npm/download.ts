@@ -68,15 +68,12 @@ export default class NPMDownloader extends EventEmitter
   }
 
   async singleDownload (emitter: PackageEmitter, pkg: Package): Promise<void> {
-    let destination = this.destinationPath(pkg)
-
-    if (await exists(destination)) {
-      if (await this.checksumMatches(destination, pkg.dist.shasum)) {
-        emitter.emit('skip', pkg)
-        return
-      }
+    if (await this.shouldSkip(pkg)) {
+      emitter.emit('skip', pkg)
+      return
     }
 
+    let destination = this.destinationPath(pkg)
     await ensureDirectory(path.dirname(destination))
 
     let download = this.factory(pkg.dist.tarball, destination)
@@ -85,6 +82,18 @@ export default class NPMDownloader extends EventEmitter
     return this.queue.add().promise.then((task) =>
       download.download().finally(() => task.done())
     )
+  }
+
+  async shouldSkip (pkg: Package) {
+    let destination = this.destinationPath(pkg)
+
+    if (await exists(destination)) {
+      if (await this.checksumMatches(destination, pkg.dist.shasum)) {
+        return true
+      }
+    }
+
+    return false
   }
 
   checksumMatches (path: string, checksum: string): Promise<boolean> {
@@ -117,13 +126,10 @@ export default class NPMDownloader extends EventEmitter
     let pendingDownloads = outResults || new Map()
 
     return this.queue.add(packageSpec).promise
-      .then((task) => {
-        return this.resolver.resolve(packageSpec)
+      .then((task) =>
+        this.resolvePackage(packageSpec)
           .finally(() => task.done())
-          .catch((err) => {
-            throw new Error(`Failed to fetch dependencies for ${packageSpec}: ${err.message}`)
-          })
-      })
+      )
       .then((pkg) => {
         if (pendingDownloads.has(pkg._id)) return []
         pendingDownloads.set(pkg._id, pkg)
@@ -140,10 +146,47 @@ export default class NPMDownloader extends EventEmitter
       })
   }
 
+  resolvePackage (spec: string | PackageSpec): Promise<Package> {
+    return this.resolver.resolve(spec)
+      .catch((err) => {
+        throw new Error(`Failed to fetch dependencies for ${spec}: ${err.message}`)
+      })
+  }
+
   destinationPath (pkg: Package) {
     let tarball = path.basename(pkg.dist.tarball)
     return path.join('downloads', pkg.name, tarball)
   }
+}
+
+function consoleOutput (downloader: NPMDownloaderInterface) {
+  downloader.on('download', (pkg: PackageEmitter) => {
+    pkg.on('fetch-metadata', () => {
+      console.log(chalk.magenta(`Fetching metadata for ${pkg.spec}`))
+    })
+
+    pkg.on('metadata', (packages: Map<string, Package>) => {
+      console.log(chalk.magenta(`Downloading ${packages.size} packages`))
+    })
+
+    pkg.on(`skip`, (pkg: Package) => {
+      console.log(chalk.yellow(`Skipping ${pkg._id}: package already downloaded`))
+    })
+
+    pkg.on(`download`, (pkg: Package, download: Downloadable) => {
+      download.on('start', () => {
+        console.log(chalk.gray(`Downloading ${pkg._id} (${download.url} -> ${download.destination})`))
+      })
+
+      download.on('finish', () => {
+        console.log(chalk.green(`Downloaded ${pkg._id} (${download.destination})`))
+      })
+
+      download.on('error', (err: Error) => {
+        console.error(chalk.red(`Failed to download ${pkg.id}: ${err}`))
+      })
+    })
+  })
 }
 
 export let NPMDownloadCommand = {
@@ -187,34 +230,7 @@ export let NPMDownloadCommand = {
     }
 
     let downloader = new NPMDownloader(options)
-
-    downloader.on('download', (pkg: PackageEmitter) => {
-      pkg.on('fetch-metadata', () => {
-        console.log(chalk.magenta(`Fetching metadata for ${pkg.spec}`))
-      })
-
-      pkg.on('metadata', (packages: Map<string, Package>) => {
-        console.log(chalk.magenta(`Downloading ${packages.size} packages`))
-      })
-
-      pkg.on(`skip`, (pkg: Package) => {
-        console.log(chalk.yellow(`Skipping ${pkg._id}: package already downloaded`))
-      })
-
-      pkg.on(`download`, (pkg: Package, download: Downloadable) => {
-        download.on('start', () => {
-          console.log(chalk.gray(`Downloading ${pkg._id} (${download.url} -> ${download.destination})`))
-        })
-
-        download.on('finish', () => {
-          console.log(chalk.green(`Downloaded ${pkg._id} (${download.destination})`))
-        })
-
-        download.on('error', (err: Error) => {
-          console.error(chalk.red(`Failed to download ${pkg.id}: ${err}`))
-        })
-      })
-    })
+    consoleOutput(downloader)
 
     for (let pkg of argv.package) {
       downloader.download(pkg)
