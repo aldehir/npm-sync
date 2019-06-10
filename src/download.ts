@@ -4,8 +4,6 @@ import { Writable } from 'stream'
 import { EventEmitter } from 'events';
 import axios, { AxiosResponse } from 'axios'
 
-import { TaskQueue, Task } from './task'
-
 export enum DownloadState {
   Queued,
   InProgress,
@@ -16,45 +14,21 @@ export enum DownloadState {
 export type DownloadFactory = (url: string | URL, destination: string) => Downloadable
 
 export interface Downloadable {
+  url: string | URL
+  destination: string
+
   download (): Promise<void>
+  promisify (): Promise<void>
+
+  on (event: 'state', callback: (state: DownloadState) => void): void
+  on (event: 'start', callback: () => void): void
+  on (event: 'progress', callback: (completed: number, total: number) => void): void
+  on (event: 'finish', callback: () => void): void
+  on (event: 'error', callback: (err: Error) => void): void
 }
 
-export interface DownloadManagerOptions {
-  concurrency?: number
-  autoStart?: boolean
-  downloadFactory?: DownloadFactory
-}
-
-export class DownloadManager {
-  queue: TaskQueue
-  factory: DownloadFactory
-
-  constructor (opts?: DownloadManagerOptions) {
-    let concurrency = opts && opts.concurrency ? opts.concurrency : 8
-    let autoStart = opts && opts.autoStart != null ? opts.autoStart : true
-
-    this.queue = new TaskQueue({ concurrency, autoStart })
-    this.factory = opts && opts.downloadFactory ? opts.downloadFactory : this.defaultFactory
-  }
-
-  start () {
-    this.queue.start()
-  }
-
-  download (url: string | URL, destination: string): Task<Downloadable> {
-    let download = this.factory(url, destination)
-    let task = this.queue.add(download)
-
-    task.promise.then((t) =>
-      t.payload!.download().finally(() => task.done())
-    )
-
-    return task
-  }
-
-  defaultFactory (url: string | URL, destination: string): Downloadable {
-    return new Download(url, destination) 
-  }
+export function defaultDownloadFactory (url: string | URL, destination: string): Downloadable {
+  return new Download(url, destination) 
 }
 
 export class Download extends EventEmitter implements Downloadable {

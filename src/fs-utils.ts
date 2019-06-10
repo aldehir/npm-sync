@@ -17,13 +17,14 @@ export function ascending(filepath: string) {
   return paths.reverse()
 }
 
-export async function mkdirRecursively(filepath: string) {
+export async function ensureDirectory(filepath: string) {
   let paths = ascending(filepath)
 
   for (let p of paths) {
-    let doesExist = await exists(p)
-    if (!doesExist) {
+    try {
       await mkdir(p)
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err
     }
   }
 }

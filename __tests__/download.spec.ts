@@ -1,7 +1,7 @@
 import fs from 'fs'
 import axios from 'axios'
 
-import { Download, DownloadManager, DownloadState } from '../src/download'
+import { Download, DownloadState } from '../src/download'
 
 const MemoryStream = require('memorystream')
 
@@ -11,27 +11,6 @@ jest.mock('axios')
 function asMock(obj: any): jest.Mock {
   return obj
 }
-
-describe('DownloadManager', () => {
-  test('calling Task#done() when download finishes', async () => {
-    let mockDownload = jest.fn().mockResolvedValue({})
-
-    let manager = new DownloadManager({
-      autoStart: false,
-      downloadFactory: (_url, _destination) => ({ download: mockDownload })
-    })
-
-    let task = manager.download('http://path/to/file.txt', 'file.txt')
-    let mockDone = jest.spyOn(task, 'done')
-
-    manager.start()
-
-    await task.promise
-
-    expect(mockDownload).toHaveBeenCalled()
-    expect(mockDone).toHaveBeenCalled()
-  })
-})
 
 describe('Download', () => {
 

@@ -1,64 +1,108 @@
+import path from 'path'
 import { EventEmitter } from 'events'
 import { Argv } from 'yargs'
 import chalk from 'chalk'
 
-import { DownloadManager } from '@app/download'
+import { TaskQueue } from '@app/task'
+import { ensureDirectory } from '@app/fs-utils'
+import { defaultDownloadFactory, DownloadFactory, Downloadable } from '@app/download'
 import PackageResolver, { Package, PackageSpec } from './package'
 
 export interface NPMDownloaderOptions {
-  manager?: DownloadManager
+  queue?: TaskQueue
   resolver?: PackageResolver
+  factory?: DownloadFactory
 }
 
 export default class NPMDownloader extends EventEmitter {
-  manager: DownloadManager
+  queue: TaskQueue
   resolver: PackageResolver
-
-  cache: Set<string>
+  factory: DownloadFactory
 
   constructor (opts: NPMDownloaderOptions = {}) {
     super()
-    this.manager = opts.manager || new DownloadManager()
+    this.queue = opts.queue || new TaskQueue({ concurrency: 8 })
     this.resolver = opts.resolver || new PackageResolver()
-    this.cache = new Set()
+    this.factory = opts.factory || defaultDownloadFactory
   }
 
   async download (packageSpec: string | PackageSpec) {
-    let pkg = await this.fetchMetadata(packageSpec)
+    console.log(chalk.magenta(`Fetching package metadata for ${packageSpec}...`))
+    let packagesToDownload = await this.fetchPackagesToDownload(packageSpec)
 
-    if (!this.shouldDownload(pkg)) {
-      console.log(chalk.yellow('Skipping ${pkg._id}, already downloaded'))
-      return
+    console.log(chalk.magenta(`Downloading ${packagesToDownload.size} packages`))
+
+    let waitFor = []
+
+    for (let [, pkg] of packagesToDownload) {
+      waitFor.push(this.singleDownload(pkg).then(
+        (download) => {
+          this.attachToDownload(pkg, download)
+          return download.promisify()
+        }
+      ))
     }
 
-    this.markAsDownloaded(pkg)
-
-    /*
-    let desination = this.destinationPath(pkg)
-
-    console.debug(`Creating directory ${destination}`)
-
-    await mkdirRecursively(path.dirname(destination))
-    */
+    await Promise.all(waitFor)
   }
 
-  async fetchMetadata(packageSpec: string | PackageSpec) {
-    try {
-      console.log(chalk.magenta(`Fetching metadata for ${packageSpec}`))
-      return await this.resolver.resolve(packageSpec)
-    } catch (err) {
-      throw new Error(`Failed to fetch metadata for ${packageSpec}`)
-    }
+  async singleDownload (pkg: Package): Promise<Downloadable> {
+    let destination = this.destinationPath(pkg)
+    await ensureDirectory(path.dirname(destination))
+
+    let download = this.factory(pkg.dist.tarball, destination)
+
+    this.queue.add().promise.then((task) =>
+      download.download().finally(() => task.done())
+    )
+
+    return download
   }
 
-  shouldDownload(pkg: Package): boolean {
-    return this.cache.has(pkg._id)
+  attachToDownload (pkg: Package, download: Downloadable) {
+    download.on('start', () => {
+      console.log(chalk.gray(`Downloading ${pkg._id} (${download.url} -> ${download.destination})`))
+    })
+
+    download.on('finish', () => {
+      console.log(chalk.green(`Downloaded ${pkg._id} -> ${download.destination}`))
+    })
+
+    download.on('error', (err) => {
+      console.log(chalk.red(`Failed to download ${pkg.id_}: ${err}`))
+    })
   }
 
-  markAsDownloaded(pkg: Package) {
-    this.cache.add(pkg._id)
+  fetchPackagesToDownload (packageSpec: string | PackageSpec): Promise<Map<string, Package>> {
+    let pendingDownloads: Map<string, Package> = new Map()
+
+    return this.queue.add(packageSpec).promise
+      .then((task) => {
+        return this.resolver.resolve(task.payload!)
+          .finally(() => task.done())
+      })
+      .then((pkg) => {
+        pendingDownloads.set(pkg._id, pkg)
+
+        return Promise.all(Object.entries(pkg.dependencies || {})
+          .map((entry) => this.fetchPackagesToDownload(new PackageSpec(...entry)))
+        )
+      })
+      .then((depLists) => {
+        for (let deps of depLists) {
+          for (let [pkgId, pkg] of deps) {
+            pendingDownloads.set(pkgId, pkg)
+          }
+        }
+
+        return pendingDownloads
+      })
   }
 
+  destinationPath (pkg: Package) {
+    let tarball = path.basename(pkg.dist.tarball)
+    return path.join('downloads', pkg.name, tarball)
+  }
 }
 
 export let NPMDownloadCommand = {
