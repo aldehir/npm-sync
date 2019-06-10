@@ -167,18 +167,16 @@ export default class NPMDownloader extends EventEmitter
   }
 
   async resolvePackage (spec: string | PackageSpec, emitter?: PackageEmitter): Promise<Package> {
-    let raise
-
     for (let attempt = 0; attempt < this.maxAttempts; attempt++) {
       try {
         return await this.resolver.resolve(spec)
       } catch (err) {
-        raise = new Error(`Failed to resolve ${spec} attempt ${attempt + 1}/${this.maxAttempts}`)
+        let raise = new Error(`Failed to resolve ${spec}, attempt ${attempt + 1}/${this.maxAttempts}`)
         if (emitter) emitter.emit('error', raise)
       }
     }
 
-    throw raise
+    throw new Error(`Exceeded number of attempts to resolve package ${spec}`)
   }
 
   destinationPath (pkg: Package) {
