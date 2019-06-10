@@ -62,7 +62,7 @@ export default class NPMDownloader extends EventEmitter {
     })
 
     download.on('error', (err) => {
-      console.log(chalk.red(`Failed to download ${pkg.id_}: ${err}`))
+      console.log(chalk.red(`Failed to download ${pkg._id}: ${err}`))
     })
   }
 
